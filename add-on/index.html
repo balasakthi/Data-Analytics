@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.css"
+    />
+    <script src="https://unpkg.com/vue@3.2.36/dist/vue.global.js"></script>
+    <!-- import ONNXRuntime Web from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <?!= include('styles'); ?>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <nav class="nav">
+          <!-- <a class="nav__brand" href="/">AI</a> -->
+          <ul class="list nav__list">
+            <li class="nav__item"><a href="#">Analytics</a></li>
+            <li class="nav__item"><a href="#">Account</a></li>
+            <li class="nav__item"><a href="#">Settings</a></li>
+          </ul>
+        </nav>
+      </header>
+      <section>
+        <div style="color: tomato">{{error}}</div>
+
+        <div>
+          <div v-if="downloading" class="status__block">
+            <span class="status__text">Downloading model</span>
+            <span class="loader"></span>
+          </div>
+          <div v-else class="status__block">
+            <span class="status__text">{{status}}</span>
+            <span
+              v-if="status ==='Analyzing' || status === 'Writing'"
+              class="loader"
+            ></span>
+            <span class="timer" v-if="elapsedTime"
+              >{{formattedElapsedTime}}</span
+            >
+          </div>
+        </div>
+        <form @submit.prevent="handleAnalyze">
+          <fieldset>
+            <label for="columnSelect">Choose a Column</label>
+            <div class="columnName">
+              <select
+                id="columnSelect"
+                v-model="selectedColumn"
+                @change="getColumnValues()"
+                required
+              >
+                <option disabled value="">Please select one</option>
+                <option v-for="(column, key) in columnHeader" :value="column">
+                  {{column}}
+                </option>
+              </select>
+              <div class="refresh">
+                <a href="#" v-on:click="refreshColumn()">
+                  <svg
+                    v-show="!isLoading"
+                    class="refreshIcon"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="m 10.5,2 c 5.288,0 9.649,3.914 10.377,9 H 24 L 20,16.917 16,11 h 2.847 C 18.136,7.028 14.673,4 10.5,4 5.813,4 2,7.813 2,12.5 c 0,4.687 3.813,8.5 8.5,8.5 3.015,0 5.662,-1.583 7.171,-3.957 l 1.2,1.775 C 16.955,21.354 13.923,23 10.5,23 4.703,23 0,18.298 0,12.5 0,6.702 4.703,2 10.5,2 Z"
+                    />
+                  </svg>
+                </a>
+                <span v-show="isLoading" class="loader"></span>
+              </div>
+            </div>
+            <label for="analysisSelect">Choose an Analytics</label>
+            <select id="analysisSelect" v-model="selectedAnalysis" required>
+              <option disabled value="">Please select one</option>
+              <option v-for="(analyze, key) in analysis" :value="analyze">
+                {{analyze}}
+              </option>
+            </select>
+            <button :disabled="checkVal" type="submit">Run</button>
+          </fieldset>
+        </form>
+      </section>
+      <footer>
+        <!-- <img src="https://raw.githubusercontent.com/balasakthi/quilt-ai/master/quilt-logo.png" alt=""/> -->
+      </footer>
+    </div>
+  </body>
+  <script src="https://cdn.jsdelivr.net/gh/balasakthi/quilt-ai/bert-text-tokenizer.js"></script>
+  <?!= include('inference.js'); ?>
+  <?!= include('app.js'); ?>
+</html>

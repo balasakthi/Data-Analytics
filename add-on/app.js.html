@@ -1,0 +1,205 @@
+<script>
+  const app = Vue.createApp({
+    data() {
+      return {
+        columnTitle: null,
+        columnValues: null,
+        columnValue: null,
+        selectedColumn: null,
+        selectedAnalysis: null,
+        analysis: ["Emotion"],
+        status: "No Analysis Running",
+        header: ["Emotion", "Score", "Latency (ms)"],
+        result: null,
+        error: null,
+        counter: 0,
+        lastColumn: null,
+        isLoading: true,
+        elapsedTime: 0,
+        timer: undefined,
+        downloading: isDownloading(),
+      };
+    },
+    mounted() {
+      this.refreshColumn();
+      this.getLastColVal();
+      let timerID = setInterval(() => this.checkModelStatus(), 1000);
+    },
+    computed: {
+      columnHeader() {
+        return this.columnTitle;
+      },
+      checkVal() {
+        return this.selectedColumn != null &&
+          this.selectedAnalysis != null &&
+          this.columnValues != null &&
+          this.downloading != true
+          ? false
+          : true;
+      },
+      formattedElapsedTime() {
+        const date = new Date(null);
+        date.setSeconds(this.elapsedTime / 1000);
+        const utc = date.toUTCString();
+        return utc.substr(utc.indexOf(":") + 1, 5);
+      },
+    },
+    methods: {
+      refreshColumn() {
+        let val = this;
+        this.isLoading = !this.isLoading;
+        this.columnValues = null;
+        this.error = null;
+        this.reset();
+        google.script.run
+          .withSuccessHandler(function (header) {
+            val.columnTitle = header;
+            val.isLoading = false;
+          })
+          .getColumnHeader();
+        if (this.columnTitle != null) {
+          this.getColumnValues();
+          this.getLastColVal();
+        }
+      },
+
+      getLastColVal() {
+        let val = this;
+        google.script.run
+          .withSuccessHandler(function (colValue) {
+            val.lastColumn = colValue;
+          })
+          .lastColumnValue();
+        console.log("Last Column Value", this.lastColumn);
+      },
+
+      getColumnValues() {
+        let val = this;
+        google.script.run
+          .withSuccessHandler(function (colValue) {
+            val.columnValues = colValue;
+          })
+          .getByName(this.selectedColumn);
+      },
+
+      async writeData(data, lastColumn) {
+        let val = this;
+        google.script.run
+          .withSuccessHandler(function (status) {
+            val.status = status;
+          })
+          .writeDataToRange(data, 3, this.counter, lastColumn);
+      },
+
+      async writeColumnHeader(header, lastColumn) {
+        google.script.run.writeHeader(header, lastColumn);
+      },
+
+      flattenArray(array) {
+        let flatArray = [];
+        for (let i = 0; i < array.length; i++) {
+          if (Array.isArray(array[i])) {
+            flatArray = flatArray.concat(this.flattenArray(array[i]));
+          } else {
+            flatArray.push(array[i]);
+          }
+        }
+        return flatArray;
+      },
+
+      start() {
+        console.log("Timer started");
+        this.status = "Analyzing";
+        this.timer = setInterval(() => {
+          this.elapsedTime += 1000;
+        }, 1000);
+        console.log(this.timer);
+      },
+      stop() {
+        clearInterval(this.timer);
+      },
+      reset() {
+        this.elapsedTime = 0;
+      },
+
+      checkModelStatus() {
+        this.downloading = isDownloading();
+        if (!this.downloading) {
+          let timerID = setInterval(() => this.checkModelStatus, 5000000);
+        }
+      },
+
+      async handleAnalyze() {
+        const wait = (time) =>
+          new Promise((resolve) => setTimeout(resolve, time));
+
+        this.status = "Analyzing";
+        //this.getLastColVal();
+        this.getColumnValues();
+        this.reset();
+        //this.start();
+        this.counter = 1;
+        let result = [];
+        this.error = null;
+
+        await wait(500);
+
+        if (this.columnValues.length) {
+          const chunkSize = 50;
+
+          for (let i = 0; i < this.columnValues.length; i += chunkSize) {
+            result = [];
+            const columnText = this.columnValues.slice(i, i + chunkSize);
+
+            await Promise.allSettled(
+              columnText.map(async (column, index) => {
+                if (column.trim().length) {
+                  let data = await lm_inference(column.trim()).then(
+                    (result) => {
+                      console.log(result);
+                      return this.flattenArray(result);
+                    }
+                  );
+
+                  data = [index, ...data];
+                  result.push(data);
+                } else {
+                  result.push([index, "", "", ""]);
+                }
+              })
+            )
+              .then((response) => {
+                console.log(response);
+              })
+              .finally(() => {
+                this.status = "No Analysis Running";
+              });
+
+            if (result.length) {
+              result.sort((index1, index2) => index1[0] - index2[0]);
+
+              result.forEach((array) => array.splice(0, 1));
+
+              this.writeColumnHeader(this.header, this.lastColumn);
+              this.writeData(result, this.lastColumn);
+
+              this.counter += chunkSize;
+
+              console.log(this.counter, chunkSize);
+
+              this.status = "Writing";
+            }
+          }
+          console.log(this.columnValues.length);
+        } else {
+          this.error = "No data found";
+        }
+        console.log(result);
+        console.log(this.header);
+        //this.stop();
+      },
+    },
+  });
+
+  app.mount("#app");
+</script>
